@@ -1,0 +1,227 @@
+#!/bin/bash
+# version: 1.1.1
+# date: 2019-10-18
+
+###############################################################################
+#           Variables
+###############################################################################
+
+INSTALL_PKGS=""
+REMOVE_PKGS=""
+
+UPDATES_DEST_DIR="/root/Downloads"
+
+###############################################################################
+#           Functions
+###############################################################################
+
+run_preupdate_hooks() {
+  if ls ${UPDATES_DEST_DIR} | grep -q ".pre$"
+  then
+    echo 
+    echo "*************************************************************"
+    echo "                 Running Pre-Update Hooks"            
+    echo "*************************************************************"
+    echo
+
+    bash ${UPDATES_DEST_DIR}/*.pre
+    echo
+  fi
+
+}
+
+run_postupdate_hooks() {
+  if ls ${UPDATES_DEST_DIR} | grep -q ".post$"
+  then
+    echo 
+    echo "*************************************************************"
+    echo "                 Running Post-Update Hooks"            
+    echo "*************************************************************"
+    echo
+
+    bash ${UPDATES_DEST_DIR}/*.post
+    echo
+  fi
+
+}
+
+add_new_zypper_repos() {
+  if ls ${UPDATES_DEST_DIR} | grep -q ".repo$"
+  then
+    echo 
+    echo "*************************************************************"
+    echo "                 Add New Zypper Repos"            
+    echo "*************************************************************"
+    echo
+
+    cp ${UPDATES_DEST_DIR}/*.repo /etc/zypp/repos.d/
+    zypper -n --gpg-auto-import-keys ref 
+    echo
+  fi
+}
+
+zypper_install_new_packages() {
+  echo 
+  echo "*************************************************************"
+  echo "                 Zypper Install New Packages"            
+  echo "*************************************************************"
+  echo
+
+  zypper ref
+
+  if ! [ -z "${INSTALL_PKGS}" ]
+  then
+    zypper -n in ${INSTALL_PKGS}
+    echo
+  else
+    echo "Nothing to do."
+    echo
+  fi
+}
+
+zypper_install_custom_rpms() {
+  echo 
+  echo "*************************************************************"
+  echo "                 Zypper Install Custom RPMs"              
+  echo "*************************************************************"
+  echo
+
+  if ls ${UPDATES_DEST_DIR} | grep -q ".rpm$"
+  then
+    cd ${UPDATES_DEST_DIR}
+    zypper -n in *.rpm
+    echo
+  else
+    echo "Nothing to do."
+    echo
+  fi
+}
+
+zypper_remove_packages() {
+  echo 
+  echo "*************************************************************"
+  echo "                      Remove Packages"                  
+  echo "*************************************************************"
+  echo
+
+  if ! [ -z "${REMOVE_PKGS}" ]
+  then
+    zypper -n rm ${REMOVE_PKGS}
+    echo
+  else
+    echo "Nothing to do."
+    echo
+  fi
+}
+
+zypper_install_updates() {
+  echo 
+  echo "*************************************************************"
+  echo "                     Install Updates"                 
+  echo "*************************************************************"
+  echo
+
+  zypper -n patch
+  zypper -n patch
+  zypper -n up
+  echo
+}
+
+zypper_remove_old_kernels() {
+  echo 
+  echo "*************************************************************"
+  echo "                Remove Old Kernel Packages"           
+  echo "*************************************************************"
+  echo
+
+  while [ $(rpm -qa | grep kernel-devel-[0-9] | sort | wc -l) -gt 1 ]
+  do
+    zypper -n rm $(rpm -qa | grep kernel-devel-[0-9] | sort | head -1)
+    echo
+  done
+
+  while [ $(rpm -qa | grep kernel-default-devel-[0-9] | sort | wc -l) -gt 1 ]
+  do
+    zypper -n rm $(rpm -qa | grep kernel-default-devel-[0-9] | sort | head -1)
+    echo
+  done
+
+  while [ $(rpm -qa | grep kernel-source-[0-9] | sort | wc -l) -gt 1 ]
+  do
+    zypper -n rm $(rpm -qa | grep kernel-source-[0-9] | sort | head -1)
+    echo
+  done
+
+  while [ $(rpm -qa | grep kernel-default-[0-9] | sort | wc -l) -gt 1 ]
+  do
+    zypper -n rm $(rpm -qa | grep kernel-default-[0-9] | sort | head -1)
+    echo
+  done
+
+  #sleep 10
+  #yast sw_single
+  echo
+}
+
+install_vbox_ext_pack() {
+  if ls ${UPDATES_DEST_DIR} | grep -q ".vbox-extpack$"
+  then
+    echo 
+    echo "*************************************************************"
+    echo "                Install VirtualBox Extension"            
+    echo "*************************************************************"
+    echo
+    echo y | VBoxManage extpack install --replace ${UPDATES_DEST_DIR}/*.vbox-extpack
+    echo
+  fi
+}
+
+zypper_clean() {
+  echo 
+  echo "*************************************************************"
+  echo "                      Clean Zypper DB"                
+  echo "*************************************************************"
+  echo
+
+  zypper clean -a
+  echo
+}
+
+remove_update_files() {
+  echo 
+  echo "*************************************************************"
+  echo "                    Remove Update Files"             
+  echo "*************************************************************"
+  echo
+
+  cd ${UPDATES_DEST_DIR}
+  rm -rf *
+}
+
+###############################################################################
+
+main() {
+  echo 
+  echo "######################################################################"
+  echo "                          Updating Image Root FS"                 
+  echo "######################################################################"
+
+  run_preupdate_hooks
+  add_new_zypper_repos
+  zypper_install_new_packages
+  zypper_install_custom_rpms
+  zypper_remove_packages
+  zypper_install_updates
+  zypper_remove_old_kernels
+  install_vbox_ext_pack
+  zypper_clean
+  run_postupdate_hooks
+  remove_update_files
+}
+
+###############################################################################
+#           Main Code Body
+###############################################################################
+
+time main ${*}
+
